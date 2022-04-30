@@ -14,7 +14,7 @@ class Environment:
         self.down = 'd'
         self.left = 'l'
         self.agent_position = np.array([0, 0])
-        self.wind_probability = 0.2
+        self.wind_strength = 0.2
         self.reset()
 
     def reset(self):
@@ -27,11 +27,24 @@ class Environment:
             [0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0]])
 
+        # self.map_matrix = np.array([
+        #     ['S', 'X', '0', '0', '0'],
+        #     ['S', 'E', '0', 'E', 'S'],
+        #     ['S', 'N', 'X', '0', 'W'],
+        #     ['W', 'X', '0', '0', 'X'],
+        #     ['0', '0', '0', '0', 'X']])
+        # self.map_matrix = np.array([
+        #     ['S', 'X', '0', '0', '0'],
+        #     ['S', 'E', '0', 'E', 'S'],
+        #     ['S', 'N', 'X', '0', 'W'],
+        #     ['W', 'X', '0', '0', 'X'],
+        #     ['0', '0', '0', '0', 'X']])
+
         self.map_matrix = np.array([
-            ['S', 'X', '0', '0', '0'],
-            ['S', 'E', '0', 'E', 'S'],
-            ['S', 'N', 'X', '0', 'W'],
-            ['W', 'X', '0', '0', 'X'],
+            ['0', 'X', '0', '0', '0'],
+            ['0', '0', '0', '0', '0'],
+            ['0', '0', 'X', '0', '0'],
+            ['0', 'X', '0', '0', 'X'],
             ['0', '0', '0', '0', 'X']])
 
     def step(self, action):
@@ -52,7 +65,7 @@ class Environment:
         reward = 0
 
         # check if wind is present
-        if map_tile in ['N', 'S', 'W', 'E'] and self.wind_probability > random.uniform(0, 1):
+        if map_tile in ['N', 'S', 'W', 'E'] and self.wind_strength > random.uniform(0, 1):
             next_step = WIND_TO_VECTORS[map_tile]
         else:
             next_step = action_vector
@@ -63,7 +76,8 @@ class Environment:
             # GO!🚨
             reward = self.reward_matrix[next_pos[0], next_pos[1]]
             self.agent_position = next_pos
-
+        print('ACTION:')
+        print(next_step)
         return self.agent_position, reward, reward == 20
 
     def valid_step(self, next_pos):
@@ -74,10 +88,11 @@ class Environment:
             returns:
                 bool if action is valid
         """
-        if next_pos[0] < 0 or next_pos[1] < 0 or next_pos[0] > self.map_matrix.shape[0] or next_pos[1] > self.map_matrix.shape[1] or self.map_matrix[next_pos[0], next_pos[1]] == 'X':
+        if next_pos[0] < 0 or next_pos[1] < 0 or next_pos[0] >= self.map_matrix.shape[0] or next_pos[1] >= self.map_matrix.shape[1]:
             return False
-        else:
-            return True
+        if self.map_matrix[next_pos[0], next_pos[1]] == 'X':
+            return False
+        return True
 
     def visualize(self):
         """
@@ -85,10 +100,10 @@ class Environment:
         (prints characters to stdout)
         """
         # clear previous visualisation
-        if platform.system() == ('Linux' or 'Darwin'):
-            os.system('clear')
-        elif platform.system() == 'Windows':
-            os.system('cls')
+        # if platform.system() == ('Linux' or 'Darwin'):
+        # os.system('clear')
+        # elif platform.system() == 'Windows':
+        # os.system('cls')
 
         for i in range(0, 5):
             for j in range(0, 5):
@@ -106,12 +121,111 @@ class Environment:
 
 
 class Agent:
-    def __init__(self):
+    def __init__(self, epsilon, alpha, gamma):
         self.action = np.array(['w', 'a', 's', 'd'])
         self.state = np.array([0, 0])
+        self.q_table = np.ones((5, 5, 4))
+        # self.q_table = np.random.randint(0, 11, (5, 5, 4))
+        self.epsilon = epsilon
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def visualize_q_table(self):
+        for i in range(0, 5):
+            for j in range(0, 5):
+                action = ACTIONS[np.argmax(self.q_table[i, j, :])]
+                print(ACTIONS_TO_EMOJI[action], end='')
+            print("\n", end='')
+
+    def choose_action(self, state):
+        """
+        Agent randomly chooses an action or chooses the best action, based on epsilon
+        Args:
+            state (np.array): current state
+        Returns:
+            action (char): action
+        """
+        if np.random.uniform(0, 1) < self.epsilon or np.sum(self.q_table[state[0], state[1]]) == 1:
+            action = np.random.choice(ACTIONS)
+        else:
+            action = ACTIONS[np.argmax(
+                self.q_table[state[0], state[1], :])]
+
+        return action
+
+    def q_value(self, state, action):
+        """
+        Get Q value out of table
+        Args:
+            state (np.array)
+            action (char)
+        Returns
+            q value (int)
+        """
+        index_of_action = np.where(ACTIONS == action)[0][0]
+
+        return self.q_table[state[0], state[1], index_of_action]
+
+    def q_update(self, backup):
+        """
+        Update Q value
+        Args:
+            backup (list): entries with [original state, action and reward]
+        """
+        td_error = 0
+        last_step = backup[0]
+        # calculate q value for initial state
+        q_old = self.q_value(backup[0][0], backup[0][1])
+        for i, step in enumerate(backup):
+            if i == 0:
+                continue
+            # step-wise reward discounting
+            td_error += self.gamma**i * step[2]
+        # calculate q value for last state, gamma-discounted
+        td_error += self.gamma**len(backup) * \
+            self.q_value(last_step[0], last_step[1])
+        # subtract original q-value
+        td_error -= q_old
+        index_of_action = np.where(ACTIONS == last_step[1])[0][0]
+        # set new q-value for initial state-action-pair with learning rate alpha
+        self.q_table[last_step[0][0], last_step[0][1],
+                     index_of_action] += self.alpha * td_error
+
+    def n_sarsa(self, environment, n_steps):
+        backup = []
+        terminal = False
+
+        # one episode
+        n = 0
+        while n < 100:
+            original_state = self.state
+            # choose action
+            action = self.choose_action(original_state)
+            # take step in environment
+            state, reward, terminal = environment.step(action)
+            environment.visualize()
+            # update state
+            self.state = state
+            backup.append([original_state, action, reward])
+            n += 1
+            print('STEP %i' % n)
+            print(backup)
+            if len(backup) == n_steps:
+                # update q value for first state in backup
+                self.q_update(backup)
+                backup.pop(0)  # remove first entry in backup
+            if terminal == True:
+                break
 
 
 ACTIONS = np.array(['w', 'a', 's', 'd'])
+
+ACTIONS_TO_EMOJI = {
+    'w': '⬆',
+    'a': '⬅',
+    's': '⬇',
+    'd': '➡',
+}
 
 WIND_TO_VECTORS = {
     'N': np.array([-1, 0]),

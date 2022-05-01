@@ -1,0 +1,10 @@
+Task 1
+The description is very understandable but missing a formal description of the states, policies and actions etc.
+
+Task 2
+The description is formal but understandable and the description of the MDP is very well done.
+
+Task 3
+Both examples were well explained and it was helpful that they related to a simiolar situation (car racing environment),
+but I can imagine that this does not qualify as two examples even though I quite liked it.
+The discussion part was a bit short, one should usually explain both sides in a discussion and then come to a conclusion, expanding on this might have been beneficial.

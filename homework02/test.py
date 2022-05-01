@@ -7,8 +7,8 @@ env.visualize()
 epsilon = 0.3
 episodes = 10000
 n_steps = 20
-alpha = 0.2
-gamma = 0.9
+alpha = 0.2  # do not crak up too high -> inf/nan
+gamma = 0.95
 our_agent = environment.Agent(epsilon, alpha, gamma)
 og_qtable = our_agent.q_table.copy()
 
